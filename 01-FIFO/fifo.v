@@ -11,3 +11,6 @@ module fifo #(
     output wire                 full, // FIFO full flag
     output wire                 empty   // FIFO empty flag
 );
+
+// Internal memory array
+reg [DATA_WIDTH-1:0] mem [0:DEPTH-1];
