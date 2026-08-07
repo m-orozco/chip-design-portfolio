@@ -44,3 +44,5 @@ end
 assign empty = (wr_ptr == rd_ptr);
 assign full = (wr_ptr[$clog2(DEPTH)-1:0] == rd_ptr[$clog2(DEPTH)-1:0]) &&
                 (wr_ptr[$clog2(DEPTH)] != rd_ptr[$clog2(DEPTH)]);  
+
+endmodule
