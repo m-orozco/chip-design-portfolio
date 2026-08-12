@@ -11,6 +11,7 @@ module fifo_tb;
     wire [7:0]  data_out;
     wire        full;
     wire        empty;
+    integer     i;
 
     // Instantiate the FIFO (device under test)
     fifo #(
@@ -61,6 +62,28 @@ module fifo_tb;
         rd_en = 1;
         @(posedge clk);
         rd_en = 0;
+
+        // Test: fill FIFOT to full (16 writes into a 16-deep FIFO)
+        for (i = 0; i < 16; i = i + 1) begin
+            @(posedge clk);
+            wr_en = 1;
+            data_in = i;
+        end
+        @(posedge clk);
+        wr_en = 0;
+
+        // Check FIFO reports full after 16 writes
+        if (full)
+            $display("PASS: full asserted correctly after 16 writes at time %0t", $time);
+        else
+            $display("FAIL: full NOT asserted after 16 writes at time %0t", $time);
+
+        // Attempt a 17th write - should be blocked by the full gaurd
+        @(posedge clk);
+        wr_en = 1;
+        data_in = 8'hFF; // this value should NEVER make it into the mem
+        @(posedge clk);
+        wr_en = 0;
 
         // Let things settle, then finish
         #20;
