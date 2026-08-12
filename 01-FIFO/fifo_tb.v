@@ -36,4 +36,37 @@ module fifo_tb;
         $dumpvars(0, fifo_tb);
     end
 
+    // Test Stimulus
+    initial begin
+        // Initialize signals
+        clk = 0;
+        rst_n = 0;
+        wr_en = 0;
+        rd_en = 0;
+        data_in = 0;
+
+        // Hold reset for a couple of clock cycles
+        #20;
+        rst_n = 1;
+
+        // Write one byte
+        @(posedge clk);
+        wr_en = 1;
+        data_in = 8'hAA;
+        @(posedge clk);
+        wr_en = 0;
+
+        // Let a cycle pass, then read it back
+        @(posedge clk);
+        rd_en = 1;
+        @(posedge clk);
+        rd_en = 0;
+
+        // Let things settle, then finish
+        #20;
+        $finish;
+
+    end
+
+
 endmodule
