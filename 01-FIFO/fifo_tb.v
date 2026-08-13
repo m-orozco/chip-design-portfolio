@@ -85,6 +85,46 @@ module fifo_tb;
         @(posedge clk);
         wr_en = 0;
 
+        // Test: read from empty - drain the FIFO completely first
+        rd_en = 1;
+        repeat (17) @(posedge clk); // clears all 17 items in buffer
+        rd_en = 0;
+
+        // FIFO should now be empty, attempt one more read
+        if (empty)
+            $display("Pass: empty asserted correctly after draining FIFO at time %0t", $time);
+        else
+            $display("FAIL: empty NOT asserted after draining FIFO at time %0t", $time);
+
+        @(posedge clk);
+        rd_en = 1; // attempt to read from empty FIFO
+        @(posedge clk);
+        rd_en = 0;
+        // data_out should hold its last valid value here, not garbage -
+        // we'll confirm this visually in GTKWave rather than self-check it
+
+        // Test: order preservation - write 5 distinct values, read them back,
+        // confirm they come out in the same order (0, 1, 2, 3, 4)
+        for (i = 0; i < 5; i = i + 1) begin
+            @(posedge clk);
+            wr_en = 1;
+            data_in = i;
+        end
+        @(posedge clk);
+        wr_en = 0;
+
+        for (i = 0; i < 5; i = i + 1) begin
+            @(posedge clk);
+            rd_en = 1;
+            @(posedge clk); // wait for registered data_out to update
+            rd_en = 0;
+            if (data_out !== i)
+                $display("Fail: order mismatch - expected %0d, got %0d at time %0t", i, data_out, $time);
+            else
+                $display("Pass: correct value %0d read back in order at time %0t", i, $time);
+            rd_en = 0;
+        end
+
         // Let things settle, then finish
         #20;
         $finish;
