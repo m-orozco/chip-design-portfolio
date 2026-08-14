@@ -12,6 +12,7 @@ module fifo_tb;
     wire        full;
     wire        empty;
     integer     i;
+    reg [7:0]   data_out_before_read;
 
     // Instantiate the FIFO (device under test)
     fifo #(
@@ -97,11 +98,17 @@ module fifo_tb;
             $display("FAIL: empty NOT asserted after draining FIFO at time %0t", $time);
 
         @(posedge clk);
-        rd_en = 1; // attempt to read from empty FIFO
+        data_out_before_read = data_out; // snapshot data_out just before illegal read attempt
+        rd_en = 1; // attempt to read from empty FIFO - should be blocked by the empty guard
         @(posedge clk);
         rd_en = 0;
-        // data_out should hold its last valid value here, not garbage -
-        // we'll confirm this visually in GTKWave rather than self-check it
+        
+        // Self-check: rd_en && !empty was false, so the read-logic always block
+        // should not have fired, meaning data_out must be unchanged
+        if (data_out !== data_out_before_read)
+            $display("FAIL: underflow guard broken - data_out changed from %0d to %0d at time %0t", data_out_before_read, data_out, $time);
+        else
+            $display("PASS: underflow guard held - data_out unchanged (%0d) after read-from-empty at time %0t", data_out, $time);
 
         // Test: order preservation - write 5 distinct values, read them back,
         // confirm they come out in the same order (0, 1, 2, 3, 4)
@@ -123,6 +130,45 @@ module fifo_tb;
             else
                 $display("Pass: correct value %0d read back in order at time %0t", i, $time);
             rd_en = 0;
+        end
+
+        // Test simultaneaous read + write in the same clock cycle
+        // First, write 3 known values so the FIFO isn't empty
+        for (i = 0; i < 3; i = i + 1) begin
+            @(posedge clk);
+            wr_en = 1;
+            data_in = 8'd100 + i; // write 100, 101, 102
+        end
+        @(posedge clk);
+        wr_en = 0;
+
+        // Now assert wr_en and rd_en together for 3 cycles: write NEW values
+        // (200, 201, 202) while simultaneaously reading the OLD values back (100, 101, 102)
+        for (i = 0; i < 3; i = i + 1) begin
+            @(posedge clk);
+            wr_en = 1;
+            rd_en = 1;
+            data_in = 8'd200 + i; // write 200, 201, 202
+            @(posedge clk); // wait for registered data_out to update
+            wr_en = 0; // deassert immediately - don't let this leak into the next iterations first edge
+            rd_en = 0;
+            if (data_out !== (8'd100 + i))
+                $display("FAIL: simultaneaous rd/wr - expected %0d, got %0d at time %0t", 8'd100 + i, data_out, $time);
+            else
+                $display("PASS: simultaneaous rd/wr - correct value %0d read back at time %0t", data_out, $time);
+        end 
+
+        // Drain the 3 values written during the simultaneaous phase (200, 201, 202)
+        // to confirm they landed correctly and in order
+        for (i = 0; i < 3;  i = i + 1) begin
+            @(posedge clk);
+            rd_en = 1;
+            @(posedge clk); // wait for registered data_out to update
+            rd_en = 0;
+            if (data_out !== (8'd200 + i))
+                $display("FAIL: post-simultaneaous drain - expected %0d, got %0d at time %0t", 8'd200 + i, data_out, $time);
+            else
+                $display("PASS: post-simultaneaous drain - correct value %0d at time %0t", data_out, $time);
         end
 
         // Let things settle, then finish
