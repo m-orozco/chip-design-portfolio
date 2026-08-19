@@ -26,5 +26,44 @@ module uart_tx #(
 
     // Baud counter - counts clk cycles, ewraps every DIVISOR cycles.
     // Wide enough to hold DIVISOR-1 for any reasonable divisor.
-    reg [15:0] baud_cnt;
+    reg [$clog2(DIVISOR)-1:0] baud_cnt;
     wire baud_tick = (baud_cnt == DIVISOR-1);
+
+    // ---- Baud tick generator ----
+    // This block knows nothing about UART framing - it just produces a
+    // one-cycle-wide "tick" every DIVISOR clk cycles, but only while the
+    // FSM is actually doing something (state != IDLE). Holding it at 0
+    // during IDLE means every new frame starts counting from a clean 0,
+    // so the first bit period is always the full DIVISOR cycles long.
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            baud_cnt <= 0;
+        end else if (state == IDLE) begin
+            baud_cnt <= 0;
+        end else if (baud_tick) begin
+            baud_cnt <= 0;
+        end else begin
+            baud_cnt <= baud_cnt + 1;
+        end
+    end
+
+    // ---- Main FSM ----
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+           state        <= IDLE;
+           tx           <= 1'b1;  // line idles high
+           tx_busy      <= 1'b0;
+           bit_idx      <= 3'd0;
+           shift_reg    <= 8'd0;
+        end else begin
+            case (state)
+
+                IDLE: begin
+                    tx      <= 1'b1;  // line idles high
+                    if (tx_start) begin
+                        shift_reg <= tx_data;  // latch the byte to send
+                        tx_busy   <= 1'b1;
+                        state     <= START;
+                    end
+                end
+                
